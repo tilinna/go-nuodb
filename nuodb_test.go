@@ -12,7 +12,7 @@ import (
 
 var _ log.Logger
 
-const default_dsn = "nuodb://cloud:user@localhost:48004/test"
+const default_dsn = "nuodb://robinh:crossbow@localhost:48004/tests"
 
 func exec(t *testing.T, db *sql.DB, sql string, args ...interface{}) (li, ra int64) {
 	result, err := db.Exec(sql, args...)
