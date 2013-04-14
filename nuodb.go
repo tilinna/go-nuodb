@@ -298,7 +298,7 @@ func (rows *Rows) Next(dest []driver.Value) error {
 		case C.NUODB_TYPE_TIME:
 			seconds := int64(value.i64)
 			nanos := int64(value.i32)
-			dest[i] = time.Unix(seconds, nanos)
+			dest[i] = time.Unix(seconds, nanos).UTC()
 		default:
 			// byte slice
 			length := int(value.i32)

@@ -12,7 +12,7 @@ import (
 
 var _ log.Logger
 
-const default_dsn = "nuodb://robinh:crossbow@localhost:48004/tests"
+const default_dsn = "nuodb://robinh:crossbow@localhost:48004/tests?timezone=UTC"
 
 func exec(t *testing.T, db *sql.DB, sql string, args ...interface{}) (li, ra int64) {
 	result, err := db.Exec(sql, args...)
@@ -72,7 +72,7 @@ func TestExecAndQuery(t *testing.T) {
 		t.Fatal(id, ra)
 	}
 	piNum := "3.1415926535897932384626433832795028841"
-	now := time.Now()
+	now := time.Now().UTC()
 	values := []interface{}{-12345, int64(2938746529387465), piNum, math.Pi, float32(math.Pi), float64(math.Pi),
 		"X", []byte{10, 20, 30, 40}, "Hello, 世界", true, false, now, now, now}
 	id, ra = exec(t, db, insert_stmt, values...)
