@@ -247,7 +247,7 @@ int nuodb_resultset_last_insert_id(struct nuodb *db, struct nuodb_resultset *rs,
 }
 
 int nuodb_resultset_column_names(struct nuodb *db, struct nuodb_resultset *rs,
-                                 struct nuodb_value values[]) {
+                                 struct nuodb_value names[]) {
     ResultSet *resultSet = reinterpret_cast<ResultSet *>(rs);
     try {
         ResultSetMetaData *resultSetMetaData = resultSet->getMetaData();
@@ -258,7 +258,7 @@ int nuodb_resultset_column_names(struct nuodb *db, struct nuodb_resultset *rs,
                 const char *string;
                 int64_t i64;
             } value = { resultSetMetaData->getColumnLabel(columnIndex) };
-            values[i].i64 = value.i64;
+            names[i].i64 = value.i64;
         }
         return 0;
     } catch (SQLException &e) {
