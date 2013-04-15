@@ -269,6 +269,9 @@ func (rows *Rows) Next(dest []driver.Value) error {
 	c := rows.c
 	var hasValues C.int
 	var bytesCount C.int
+	if len(rows.rowValues) == 0 {
+		return io.EOF
+	}
 	if C.nuodb_resultset_next(c.db, rows.rs, &hasValues, &bytesCount,
 		(*C.struct_nuodb_value)(unsafe.Pointer(&rows.rowValues[0]))) != 0 {
 		return c.lastError() // TODO: go1.0.3 doesn't return this to the client
