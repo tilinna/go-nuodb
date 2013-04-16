@@ -67,7 +67,7 @@ func TestExecAndQuery(t *testing.T) {
 	}
 	insert_stmt := "INSERT INTO FooBar (ir,big,num,dec,flo,dou,cha,blo,str,bo1,bo2,tim,dat,ts) " +
 		"VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-	id, ra = exec(t, db, insert_stmt)
+	id, ra = exec(t, db, insert_stmt, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	if id != 1 || ra != 1 {
 		t.Fatal(id, ra)
 	}
@@ -145,7 +145,7 @@ func TestCommitAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tx.Exec("INSERT INTO tests.FooBarTwo (big) VALUES (?),(?)", 2345345, 8092333, "extra parameter")
+	_, err = tx.Exec("INSERT INTO tests.FooBarTwo (big) VALUES (?),(?)", 2345345, 8092333)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -148,7 +148,7 @@ func (stmt *Stmt) bind(args []driver.Value) error {
 	parameters := make([]C.struct_nuodb_value, parameterCount)
 	for i, v := range args {
 		if i >= parameterCount {
-			break // ignore extra args
+			break // go1.0.3 allowed extra args; ignore
 		}
 		var vt C.enum_nuodb_value_type
 		var i32 C.int32_t
