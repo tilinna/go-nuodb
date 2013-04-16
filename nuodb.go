@@ -169,7 +169,8 @@ func (stmt *Stmt) bind(args []driver.Value) error {
 			}
 		case string:
 			vt = C.NUODB_TYPE_STRING
-			b := []byte(v) // caveat: freed before the _bind, but the &b[0] should be valid
+			b := []byte(v)
+			args[i] = b // ensure the b is not GC'ed before the _bind
 			i32 = C.int32_t(len(v))
 			i64 = C.int64_t(uintptr(unsafe.Pointer(&b[0])))
 		case []byte:
@@ -278,7 +279,7 @@ func (rows *Rows) Next(dest []driver.Value) error {
 	}
 	if C.nuodb_resultset_next(c.db, rows.rs, &hasValues, &bytesCount,
 		(*C.struct_nuodb_value)(unsafe.Pointer(&rows.rowValues[0]))) != 0 {
-		return c.lastError() // TODO: go1.0.3 doesn't return this to the client
+		return c.lastError()
 	}
 	if hasValues == 0 {
 		return io.EOF
