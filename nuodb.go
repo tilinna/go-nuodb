@@ -141,11 +141,15 @@ func (stmt *Stmt) NumInput() int {
 
 func (stmt *Stmt) bind(args []driver.Value) error {
 	c := stmt.c
-	if len(args) == 0 {
+	parameterCount := int(stmt.parameterCount)
+	if parameterCount == 0 || len(args) == 0 {
 		return nil
 	}
-	parameters := make([]C.struct_nuodb_value, stmt.parameterCount)
+	parameters := make([]C.struct_nuodb_value, parameterCount)
 	for i, v := range args {
+		if i >= parameterCount {
+			break // ignore extra args
+		}
 		var vt C.enum_nuodb_value_type
 		var i32 C.int32_t
 		var i64 C.int64_t

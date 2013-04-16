@@ -97,6 +97,9 @@ func TestExecAndQuery(t *testing.T) {
 	if !rows.Next() {
 		t.Fatal("Expected rows")
 	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
 	var (
 		ir, big            int64
 		num, dec, cha, str string
@@ -142,7 +145,7 @@ func TestCommitAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tx.Exec("INSERT INTO tests.FooBarTwo (big) VALUES (?),(?)", 2345345, 8092333)
+	_, err = tx.Exec("INSERT INTO tests.FooBarTwo (big) VALUES (?),(?)", 2345345, 8092333, "extra parameter")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +155,9 @@ func TestCommitAndRollback(t *testing.T) {
 	rows := query(t, db, "SELECT big FROM tests.FooBarTwo")
 	if rows.Next() {
 		log.Fatal("Should not have any rows", rows)
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
 	}
 
 	// Insert again and commit
@@ -178,6 +184,7 @@ func TestCommitAndRollback(t *testing.T) {
 	if !rows.Next() {
 		log.Fatal("Should have had rows", rows)
 	}
+
 	rows.Scan(&values[1], &str, &dou)
 	if values != [2]int64{7347388, 2341478} {
 		t.Fatal("Unexpected:", values)
@@ -206,6 +213,9 @@ func TestBytes(t *testing.T) {
 	if !rows.Next() {
 		t.Fatal("Should have had rows", rows)
 	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
 	var b1, b2, b3 []byte
 	if err := rows.Scan(&b1, &b2, &b3); err != nil {
 		t.Fatal("Failed to scan:", err)
@@ -225,12 +235,18 @@ type Item struct{ a, b string }
 
 func appendRows(t *testing.T, items []Item, rows *sql.Rows) []Item {
 	for rows.Next() {
+		if rows.Err() != nil {
+			t.Fatal(rows.Err())
+		}
 		var a, b sql.NullString
 		if err := rows.Scan(&a, &b); err != nil {
 			t.Fatal(a, b, err)
 		}
 		item := Item{a: a.String, b: b.String}
 		items = append(items, item)
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
 	}
 	return items
 }
@@ -305,6 +321,9 @@ func TestPrepare(t *testing.T) {
 	stmt.Query("aa1", "bb1")
 	for rows.Next() {
 		t.Fatal("Unexpected values")
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
 	}
 	var id int64
 	if err = rows.Scan(&id); err == nil {
