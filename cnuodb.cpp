@@ -3,6 +3,7 @@
 */
 #include "cnuodb.h"
 #include "NuoDB.h"
+#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -201,7 +202,8 @@ int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st,
             updateCount = 0;
         } else {
             resultSet = stmt->getGeneratedKeys();
-            updateCount = stmt->getUpdateCount();
+            // NuoDB uses -1 as a flag for zero-rows-affected
+            updateCount = std::max(0, stmt->getUpdateCount());
         }
         *column_count = resultSet->getMetaData()->getColumnCount();
         *affected_rows = updateCount;
