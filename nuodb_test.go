@@ -330,3 +330,18 @@ func TestPrepare(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDDL(t *testing.T) {
+	db := testConn(t)
+	defer db.Close()
+	result, err := db.Exec("  \t  \nCREAte\t  \nTABLE FooBar (id integer)")
+	if err != nil {
+		t.Fatal(result, err)
+	}
+	if id, err := result.LastInsertId(); err == nil {
+		t.Fatal("DDL statement", id, err)
+	}
+	if nrows, err := result.RowsAffected(); err == nil {
+		t.Fatal("DDL statement", nrows, err)
+	}
+}

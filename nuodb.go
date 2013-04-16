@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/url"
 	"path"
+	"regexp"
 	"time"
 	"unsafe"
 )
@@ -27,6 +28,7 @@ type Stmt struct {
 	c              *Conn
 	st             *C.struct_nuodb_statement
 	parameterCount C.int
+	ddlStatement   bool
 }
 
 type Result struct {
@@ -48,6 +50,8 @@ type Tx struct {
 
 var errUninitialized = errors.New("nuodb: uninitialized connection")
 var errClosed = errors.New("nuodb: connection is closed")
+
+var dmlStatementRegexp = regexp.MustCompile(`^\s*(?i:DELETE|EXPLAIN|INSERT|REPLACE|SELECT|TRUNCATE|UPDATE)\s+`)
 
 func init() {
 	sql.Register("nuodb", &nuodbDriver{})
@@ -109,6 +113,7 @@ func (c *Conn) Prepare(sql string) (driver.Stmt, error) {
 	if C.nuodb_statement_prepare(c.db, csql, &stmt.st, &stmt.parameterCount) != 0 {
 		return nil, c.lastError()
 	}
+	stmt.ddlStatement = !dmlStatementRegexp.MatchString(sql)
 	return stmt, nil
 }
 
@@ -210,13 +215,16 @@ func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 	if C.nuodb_statement_execute(c.db, stmt.st, &resultSet, &columnCount, &result.rowsAffected) != 0 {
 		return nil, c.lastError()
 	}
-	if result.rowsAffected > 0 && columnCount == 1 &&
+	if !stmt.ddlStatement && result.rowsAffected > 0 && columnCount == 1 &&
 		C.nuodb_resultset_last_insert_id(c.db, resultSet, &result.lastInsertId) != 0 {
 		err = c.lastError()
 	}
 	// Always close the resultSet, but retain previous err value
 	if C.nuodb_resultset_close(c.db, &resultSet) != 0 && err == nil {
 		err = c.lastError()
+	}
+	if stmt.ddlStatement {
+		return driver.ResultNoRows, err
 	}
 	return result, err
 }
@@ -322,7 +330,8 @@ func (rows *Rows) Next(dest []driver.Value) error {
 }
 
 func (rows *Rows) Close() error {
-	if rows != nil && rows.c.db != nil && C.nuodb_resultset_close(rows.c.db, &rows.rs) != 0 {
+	if rows != nil && rows.c.db != nil &&
+		C.nuodb_resultset_close(rows.c.db, &rows.rs) != 0 {
 		return rows.c.lastError()
 	}
 	return nil
