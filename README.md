@@ -17,6 +17,12 @@ $ make -C `go env GOPATH`/src/github.com/tilinna/go-nuodb
 $ go install github.com/tilinna/go-nuodb
 ```
 
+Install the libcnuodb.so to some of the common LIB paths (this is not needed to run the package tests):
+
+```shell
+$ sudo install `go env GOPATH`/src/github.com/tilinna/go-nuodb/libcnuodb.so /usr/lib64/libcnuodb.so
+```
+
 ## Usage
 
 ```go
