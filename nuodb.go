@@ -235,15 +235,14 @@ func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 	if C.nuodb_statement_execute(c.db, stmt.st, &resultSet, &columnCount, &result.rowsAffected) != 0 {
 		return nil, c.lastError()
 	}
-	if !stmt.ddlStatement && result.rowsAffected > 0 && columnCount > 0 &&
-		C.nuodb_resultset_last_insert_id(c.db, resultSet, &result.lastInsertId) != 0 {
+	if result.rowsAffected > 0 && C.nuodb_resultset_last_insert_id(c.db, resultSet, &result.lastInsertId) != 0 {
 		err = c.lastError()
 	}
 	// Always close the resultSet, but retain previous err value
 	if C.nuodb_resultset_close(c.db, &resultSet) != 0 && err == nil {
 		err = c.lastError()
 	}
-	if stmt.ddlStatement {
+	if result.rowsAffected == 0 && stmt.ddlStatement {
 		return driver.ResultNoRows, err
 	}
 	return result, err
