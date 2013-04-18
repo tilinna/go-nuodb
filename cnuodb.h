@@ -54,7 +54,7 @@ int nuodb_execute(struct nuodb *db, const char *sql, int64_t *rows_affected, int
 
 int nuodb_statement_prepare(struct nuodb *db, const char *sql, struct nuodb_statement **st, int *parameter_count);
 int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st, struct nuodb_value parameters[]);
-int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st, struct nuodb_resultset **rs, int *column_count, int64_t *affected_rows);
+int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st, struct nuodb_resultset **rs, int *column_count, int64_t *rows_affected);
 int nuodb_statement_close(struct nuodb *db, struct nuodb_statement **st);
 
 int nuodb_resultset_last_insert_id(struct nuodb *db, struct nuodb_resultset *rs, int64_t *last_insert_id);

@@ -225,7 +225,7 @@ int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st,
 }
 
 int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st,
-                            struct nuodb_resultset **rs, int *column_count, int64_t *affected_rows) {
+                            struct nuodb_resultset **rs, int *column_count, int64_t *rows_affected) {
     ResultSet *resultSet = 0;
     PreparedStatement *stmt = reinterpret_cast<PreparedStatement *>(st);
     try {
@@ -240,7 +240,7 @@ int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st,
             updateCount = std::max(0, stmt->getUpdateCount());
         }
         *column_count = resultSet->getMetaData()->getColumnCount();
-        *affected_rows = updateCount;
+        *rows_affected = updateCount;
         *rs = reinterpret_cast<struct nuodb_resultset *>(resultSet);
         return 0;
     } catch (SQLException &e) {
