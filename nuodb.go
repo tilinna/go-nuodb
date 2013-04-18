@@ -53,6 +53,10 @@ var errClosed = errors.New("nuodb: connection is closed")
 
 var dmlStatementRegexp = regexp.MustCompile(`^\s*(?i:DELETE|EXPLAIN|INSERT|REPLACE|SELECT|TRUNCATE|UPDATE)\s+`)
 
+func ddlStatement(sql string) bool {
+	return !dmlStatementRegexp.MatchString(sql)
+}
+
 func init() {
 	sql.Register("nuodb", &nuodbDriver{})
 }
@@ -113,7 +117,7 @@ func (c *Conn) Prepare(sql string) (driver.Stmt, error) {
 	if C.nuodb_statement_prepare(c.db, csql, &stmt.st, &stmt.parameterCount) != 0 {
 		return nil, c.lastError()
 	}
-	stmt.ddlStatement = !dmlStatementRegexp.MatchString(sql)
+	stmt.ddlStatement = ddlStatement(sql)
 	return stmt, nil
 }
 
@@ -128,6 +132,22 @@ func (c *Conn) Begin() (driver.Tx, error) {
 		return nil, c.lastError()
 	}
 	return tx, nil
+}
+
+func (c Conn) Exec(sql string, args []driver.Value) (driver.Result, error) {
+	if len(args) > 0 {
+		return nil, driver.ErrSkip
+	}
+	csql := C.CString(sql)
+	defer C.free(unsafe.Pointer(csql))
+	result := &Result{}
+	if C.nuodb_execute(c.db, csql, &result.rowsAffected, &result.lastInsertId) != 0 {
+		return nil, c.lastError()
+	}
+	if result.rowsAffected == 0 && ddlStatement(sql) {
+		return driver.ResultNoRows, nil
+	}
+	return result, nil
 }
 
 func (c *Conn) Close() error {

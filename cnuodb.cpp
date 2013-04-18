@@ -113,6 +113,40 @@ int nuodb_rollback(struct nuodb *db) {
     }
 }
 
+int nuodb_execute(struct nuodb *db, const char *sql,
+                  int64_t *rows_affected, int64_t *last_insert_id) {
+    Statement *stmt = 0;
+    ResultSet *resultSet = 0;
+    try {
+        stmt = db->conn->createStatement();
+        int64_t lastInsertId = 0;
+        int updateCount = stmt->executeUpdate(sql, RETURN_GENERATED_KEYS);
+        if (updateCount > 0) {
+            resultSet = stmt->getGeneratedKeys();
+            if (resultSet->getMetaData()->getColumnCount() > 0) {
+                while (resultSet->next()) {
+                    // TODO find out how to read the last id first
+                }
+                lastInsertId = resultSet->getLong(1);
+            }
+            resultSet->close();
+            resultSet = 0;
+        }
+        stmt->close();
+        *rows_affected = updateCount;
+        *last_insert_id = lastInsertId;
+        return 0;
+    } catch (SQLException &e) {
+        if (resultSet) {
+            resultSet->close();
+        }
+        if (stmt) {
+            stmt->close();
+        }
+        return setError(db, e);
+    }
+}
+
 int nuodb_statement_prepare(struct nuodb *db, const char *sql,
                             struct nuodb_statement **st, int *parameter_count) {
     PreparedStatement *stmt = 0;

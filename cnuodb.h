@@ -50,6 +50,7 @@ int nuodb_autocommit(struct nuodb *db, int *state);
 int nuodb_autocommit_set(struct nuodb *db, int state);
 int nuodb_commit(struct nuodb *db);
 int nuodb_rollback(struct nuodb *db);
+int nuodb_execute(struct nuodb *db, const char *sql, int64_t *rows_affected, int64_t *last_insert_id);
 
 int nuodb_statement_prepare(struct nuodb *db, const char *sql, struct nuodb_statement **st, int *parameter_count);
 int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st, struct nuodb_value parameters[]);
