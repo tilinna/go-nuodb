@@ -133,7 +133,8 @@ int nuodb_execute(struct nuodb *db, const char *sql,
             resultSet = 0;
         }
         stmt->close();
-        *rows_affected = updateCount;
+        // NuoDB uses -1 as a flag for zero-rows-affected
+        *rows_affected = std::max(0, updateCount);
         *last_insert_id = lastInsertId;
         return 0;
     } catch (SQLException &e) {
@@ -236,11 +237,10 @@ int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st,
             updateCount = 0;
         } else {
             resultSet = stmt->getGeneratedKeys();
-            // NuoDB uses -1 as a flag for zero-rows-affected
-            updateCount = std::max(0, stmt->getUpdateCount());
+            updateCount = stmt->getUpdateCount();
         }
         *column_count = resultSet->getMetaData()->getColumnCount();
-        *rows_affected = updateCount;
+        *rows_affected = std::max(0, updateCount);
         *rs = reinterpret_cast<struct nuodb_resultset *>(resultSet);
         return 0;
     } catch (SQLException &e) {
