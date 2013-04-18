@@ -269,7 +269,7 @@ int nuodb_resultset_last_insert_id(struct nuodb *db, struct nuodb_resultset *rs,
     ResultSet *resultSet = reinterpret_cast<ResultSet *>(rs);
     try {
         int64_t lastInsertId = 0;
-        if (resultSet->getMetaData()->getColumnCount() == 1) {
+        if (resultSet->getMetaData()->getColumnCount() > 0) {
             while (resultSet->next()) {
                 // TODO find out how to read the last id first
             }
