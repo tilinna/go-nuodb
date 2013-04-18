@@ -1,7 +1,7 @@
 // Copyright (C) 2013 Timo Linna. All Rights Reserved.
 package nuodb
 
-// #cgo LDFLAGS: -L. -lcnuodb
+// #cgo LDFLAGS: -L. -lcnuodb -L/opt/nuodb/lib64/ -lNuoRemote
 // #include "cnuodb.h"
 // #include <stdlib.h>
 import "C"
