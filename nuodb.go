@@ -239,17 +239,8 @@ func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 		return nil, fmt.Errorf("bind: %s", err)
 	}
 	result := &Result{}
-	var resultSet *C.struct_nuodb_resultset
-	var columnCount C.int
-	if C.nuodb_statement_execute(c.db, stmt.st, &resultSet, &columnCount, &result.rowsAffected) != 0 {
+	if C.nuodb_statement_execute(c.db, stmt.st, &result.rowsAffected, &result.lastInsertId) != 0 {
 		return nil, c.lastError()
-	}
-	if result.rowsAffected > 0 && C.nuodb_resultset_last_insert_id(c.db, resultSet, &result.lastInsertId) != 0 {
-		err = c.lastError()
-	}
-	// Always close the resultSet, but retain previous err value
-	if C.nuodb_resultset_close(c.db, &resultSet) != 0 && err == nil {
-		err = c.lastError()
 	}
 	if result.rowsAffected == 0 && stmt.ddlStatement {
 		return driver.ResultNoRows, err
@@ -268,8 +259,7 @@ func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 	rows := &Rows{c: c}
 	var columnCount C.int
-	var rowsAffected C.int64_t
-	if C.nuodb_statement_execute(c.db, stmt.st, &rows.rs, &columnCount, &rowsAffected) != 0 {
+	if C.nuodb_statement_query(c.db, stmt.st, &rows.rs, &columnCount) != 0 {
 		return nil, c.lastError()
 	}
 	if columnCount > 0 {

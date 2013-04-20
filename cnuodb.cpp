@@ -3,7 +3,6 @@
 */
 #include "cnuodb.h"
 #include "NuoDB.h"
-#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -113,34 +112,41 @@ int nuodb_rollback(struct nuodb *db) {
     }
 }
 
-int nuodb_execute(struct nuodb *db, const char *sql,
-                  int64_t *rows_affected, int64_t *last_insert_id) {
-    Statement *stmt = 0;
+static int fetchExecuteResult(struct nuodb *db, Statement *stmt,
+                              int64_t *rows_affected, int64_t *last_insert_id) {
     ResultSet *resultSet = 0;
     try {
-        stmt = db->conn->createStatement();
-        int64_t lastInsertId = 0;
-        int updateCount = stmt->executeUpdate(sql, RETURN_GENERATED_KEYS);
-        if (updateCount > 0) {
-            resultSet = stmt->getGeneratedKeys();
-            if (resultSet->getMetaData()->getColumnCount() > 0) {
-                while (resultSet->next()) {
-                    // TODO find out how to read the last id first
-                }
-                lastInsertId = resultSet->getLong(1);
-            }
-            resultSet->close();
-            resultSet = 0;
-        }
-        stmt->close();
+        resultSet = stmt->getGeneratedKeys();
         // NuoDB uses -1 as a flag for zero-rows-affected
-        *rows_affected = std::max(0, updateCount);
-        *last_insert_id = lastInsertId;
+        *rows_affected = std::max(0, stmt->getUpdateCount());
+        if (*rows_affected > 0 && resultSet->getMetaData()->getColumnCount() > 0) {
+            while (resultSet->next()) {
+                // TODO find out how to read the last id first
+            }
+            *last_insert_id = resultSet->getLong(1);
+        } else {
+            *last_insert_id = 0;
+        }
+        resultSet->close();
         return 0;
     } catch (SQLException &e) {
         if (resultSet) {
             resultSet->close();
         }
+        return setError(db, e);
+    }
+}
+
+int nuodb_execute(struct nuodb *db, const char *sql,
+                  int64_t *rows_affected, int64_t *last_insert_id) {
+    Statement *stmt = 0;
+    try {
+        stmt = db->conn->createStatement();
+        stmt->executeUpdate(sql, RETURN_GENERATED_KEYS);
+        int rc = fetchExecuteResult(db, stmt, rows_affected, last_insert_id);
+        stmt->close();
+        return rc;
+    } catch (SQLException &e) {
         if (stmt) {
             stmt->close();
         }
@@ -226,21 +232,28 @@ int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st,
 }
 
 int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st,
-                            struct nuodb_resultset **rs, int *column_count, int64_t *rows_affected) {
+                            int64_t *rows_affected, int64_t *last_insert_id) {
+    PreparedStatement *stmt = reinterpret_cast<PreparedStatement *>(st);
+    try {
+        stmt->executeUpdate();
+        return fetchExecuteResult(db, stmt, rows_affected, last_insert_id);
+    } catch (SQLException &e) {
+        return setError(db, e);
+    }
+}
+
+int nuodb_statement_query(struct nuodb *db, struct nuodb_statement *st,
+                          struct nuodb_resultset **rs, int *column_count) {
     ResultSet *resultSet = 0;
     PreparedStatement *stmt = reinterpret_cast<PreparedStatement *>(st);
     try {
-        int updateCount;
         bool hasResults = stmt->execute();
         if (hasResults) {
             resultSet = stmt->getResultSet();
-            updateCount = 0;
         } else {
             resultSet = stmt->getGeneratedKeys();
-            updateCount = stmt->getUpdateCount();
         }
         *column_count = resultSet->getMetaData()->getColumnCount();
-        *rows_affected = std::max(0, updateCount);
         *rs = reinterpret_cast<struct nuodb_resultset *>(resultSet);
         return 0;
     } catch (SQLException &e) {
@@ -258,24 +271,6 @@ int nuodb_statement_close(struct nuodb *db, struct nuodb_statement **st) {
             stmt->close();
             *st = 0;
         }
-        return 0;
-    } catch (SQLException &e) {
-        return setError(db, e);
-    }
-}
-
-int nuodb_resultset_last_insert_id(struct nuodb *db, struct nuodb_resultset *rs,
-                                   int64_t *last_insert_id) {
-    ResultSet *resultSet = reinterpret_cast<ResultSet *>(rs);
-    try {
-        int64_t lastInsertId = 0;
-        if (resultSet->getMetaData()->getColumnCount() > 0) {
-            while (resultSet->next()) {
-                // TODO find out how to read the last id first
-            }
-            lastInsertId = resultSet->getLong(1);
-        }
-        *last_insert_id = lastInsertId;
         return 0;
     } catch (SQLException &e) {
         return setError(db, e);
