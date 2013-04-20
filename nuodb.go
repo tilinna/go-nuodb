@@ -21,7 +21,8 @@ import (
 type nuodbDriver struct{}
 
 type Conn struct {
-	db *C.struct_nuodb
+	db  *C.struct_nuodb
+	loc *time.Location
 }
 
 type Stmt struct {
@@ -80,7 +81,15 @@ func (d *nuodbDriver) Open(dsn string) (conn driver.Conn, err error) {
 }
 
 func newConn(database, username, password, schema, timezone string) (*Conn, error) {
-	c := &Conn{}
+	location := timezone
+	if timezone == "" {
+		location = "Local"
+	}
+	loc, err := time.LoadLocation(location)
+	if err != nil {
+		return nil, fmt.Errorf("nuodb: %s", err)
+	}
+	c := &Conn{loc: loc}
 	C.nuodb_init(&c.db)
 	cdatabase := C.CString(database)
 	defer C.free(unsafe.Pointer(cdatabase))
@@ -333,7 +342,7 @@ func (rows *Rows) Next(dest []driver.Value) error {
 		case C.NUODB_TYPE_TIME:
 			seconds := int64(value.i64)
 			nanos := int64(value.i32)
-			dest[i] = time.Unix(seconds, nanos).UTC()
+			dest[i] = time.Unix(seconds, nanos).In(c.loc)
 		default:
 			// byte slice
 			length := int(value.i32)

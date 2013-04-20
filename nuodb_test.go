@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const default_dsn = "nuodb://robinh:crossbow@localhost:48004/tests?timezone=UTC"
+const default_dsn = "nuodb://robinh:crossbow@localhost:48004/tests?timezone=America/Los_Angeles"
 
 func exec(t *testing.T, db *sql.DB, sql string, args ...interface{}) (li, ra int64) {
 	result, err := db.Exec(sql, args...)
@@ -72,7 +72,7 @@ func TestExecAndQuery(t *testing.T) {
 		t.Fatal(id, ra)
 	}
 	piNum := "3.1415926535897932384626433832795028841"
-	now := time.Now().UTC()
+	now := time.Now() // Insert with local time zone
 	values := []interface{}{-12345, int64(2938746529387465), piNum, math.Pi, float32(math.Pi), float64(math.Pi),
 		"X", []byte{10, 20, 30, 40}, "Hello, 世界", true, false, now, now, now}
 	id, ra = exec(t, db, insert_stmt, values...)
@@ -114,10 +114,17 @@ func TestExecAndQuery(t *testing.T) {
 	if err := rows.Scan(vars...); err != nil {
 		t.Fatal(err)
 	}
-	db_time := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, now.Location())
-	db_date := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	// BUG in NuoDB? -- I expected to receive a microsecond-resolution time but got a second-resolution instead
-	db_ts := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, now.Location())
+
+	// Fetch with connections' time zone
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.In(loc)
+	db_time := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, loc)
+	db_date := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	// NOTE: there's a bug in NuoDB so that the returned nanoseconds are always 0
+	db_ts := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, loc)
 
 	expected_values := []interface{}{int64(2), int64(-12345), int64(2938746529387465), piNum, "3.1416",
 		float32(math.Pi), float64(math.Pi), "X", []byte{10, 20, 30, 40}, "Hello, 世界", true, false,
@@ -126,8 +133,14 @@ func TestExecAndQuery(t *testing.T) {
 	for i, v := range vars {
 		vi := reflect.ValueOf(v).Elem().Interface()
 		ei := reflect.ValueOf(expected_values[i]).Interface()
-		if !reflect.DeepEqual(vi, ei) {
-			t.Fatalf("Col#%d: expected %v, got %v", i+1, ei, vi)
+		if vt, ok := v.(*time.Time); ok {
+			if !vt.Equal(expected_values[i].(time.Time)) {
+				t.Fatalf("time.Time at Col#%d: expected %v, got %v", i+1, ei, vi)
+			}
+		} else {
+			if !reflect.DeepEqual(vi, ei) {
+				t.Fatalf("Col#%d: expected %v, got %v", i+1, ei, vi)
+			}
 		}
 	}
 }
