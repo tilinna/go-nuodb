@@ -5,7 +5,7 @@ go-nuodb
 
 It wraps the libNuoRemote.so C++ API with a custom C API and then uses Cgo for calling it.
 
-Tested with Go tip 16677:654eb0e0adf4 (< 1.1) and NuoDB 1.0.2-142-902dc7c on x86_64 CentOS 6.4.
+Tested with Go tip 16713:8bdcdfcf9152 (< 1.1) and NuoDB 1.0.2-142-902dc7c on x86_64 CentOS 6.4.
 
 ## Setup
 
@@ -13,8 +13,7 @@ Installation requires NuoDB in /opt/nuodb and properly set $GOPATH.
 
 ```shell
 $ go get -d github.com/tilinna/go-nuodb
-$ make -C `go env GOPATH`/src/github.com/tilinna/go-nuodb
-$ go install github.com/tilinna/go-nuodb
+$ make -C `go env GOPATH`/src/github.com/tilinna/go-nuodb install
 ```
 
 ## Usage
