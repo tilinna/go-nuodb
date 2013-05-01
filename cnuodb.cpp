@@ -196,21 +196,17 @@ int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st,
                     stmt->setBoolean(parameterIndex, !!parameters[i].i64);
                     break;
                 case NUODB_TYPE_STRING: {
-                    union {
-                        int64_t i64;
-                        const char *bytes;
-                    } value = { parameters[i].i64 };
+                    size_t length = parameters[i].i32;
+                    const char *s = reinterpret_cast<const char*>(parameters[i].i64);
                     // Extra conversion due to missing length param in the setString API
-                    std::string str(value.bytes, parameters[i].i32);
+                    const std::string str(s, length);
                     stmt->setString(parameterIndex, str.c_str());
                     break;
                 }
                 case NUODB_TYPE_BYTES: {
-                    union {
-                        int64_t i64;
-                        const unsigned char *bytes;
-                    } value = { parameters[i].i64 };
-                    stmt->setBytes(parameterIndex, parameters[i].i32, value.bytes);
+                    int length = parameters[i].i32;
+                    const unsigned char *bytes = reinterpret_cast<const unsigned char*>(parameters[i].i64);
+                    stmt->setBytes(parameterIndex, length, bytes);
                     break;
                 }
                 case NUODB_TYPE_TIME: {
@@ -282,11 +278,8 @@ int nuodb_resultset_column_names(struct nuodb *db, struct nuodb_resultset *rs,
         int columnCount = resultSetMetaData->getColumnCount();
         for (int i=0; i < columnCount; ++i) {
             int columnIndex = i+1;
-            union {
-                const char *string;
-                int64_t i64;
-            } value = { resultSetMetaData->getColumnLabel(columnIndex) };
-            names[i].i64 = value.i64;
+            const char *string = resultSetMetaData->getColumnLabel(columnIndex);
+            names[i].i64 = reinterpret_cast<int64_t>(string);
         }
         return 0;
     } catch (SQLException &e) {
@@ -325,14 +318,11 @@ int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs,
                         // fallthrough; must be fetched as a string
                     case NUOSQL_NUMERIC:
                     case NUOSQL_DECIMAL: {
-                        union {
-                            const char *string;
-                            int64_t i64;
-                        } value = { resultSet->getString(columnIndex) };
+                        const char *string = resultSet->getString(columnIndex);
                         if (!resultSet->wasNull()) {
                             vt = NUODB_TYPE_BYTES; // strings are returned as bytes
-                            i64 = value.i64;
-                            i32 = std::strlen(value.string);
+                            i64 = reinterpret_cast<int64_t>(string);
+                            i32 = std::strlen(string);
                         }
                         break;
                     }
@@ -370,11 +360,7 @@ int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs,
                         const Bytes b = resultSet->getBytes(columnIndex);
                         if (!resultSet->wasNull()) {
                             vt = NUODB_TYPE_BYTES;
-                            union {
-                                const unsigned char *bytes;
-                                int64_t i64;
-                            } value = { b.data };
-                            i64 = value.i64;
+                            i64 = reinterpret_cast<int64_t>(b.data);
                             i32 = b.length;
                         }
                         break;
