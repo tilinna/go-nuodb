@@ -200,7 +200,7 @@ int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st,
                         int64_t i64;
                         const char *bytes;
                     } value = { parameters[i].i64 };
-                    // Extra conversion due to missing length param from the setString API
+                    // Extra conversion due to missing length param in the setString API
                     std::string str(value.bytes, parameters[i].i32);
                     stmt->setString(parameterIndex, str.c_str());
                     break;
@@ -224,9 +224,6 @@ int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st,
         }
         return 0;
     } catch  (SQLException &e) {
-        if (stmt) {
-            stmt->close();
-        }
         return setError(db, e);
     }
 }
