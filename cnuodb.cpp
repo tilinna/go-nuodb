@@ -295,10 +295,9 @@ int nuodb_resultset_column_names(struct nuodb *db, struct nuodb_resultset *rs,
 }
 
 int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs,
-                         int *has_values, int *bytes_count, struct nuodb_value values[]) {
+                         int *has_values, struct nuodb_value values[]) {
     ResultSet *resultSet = reinterpret_cast<ResultSet *>(rs);
     try {
-        int bytesCount = 0;
         *has_values = resultSet->next();
         if (*has_values) {
             ResultSetMetaData *resultSetMetaData = resultSet->getMetaData();
@@ -326,11 +325,14 @@ int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs,
                         // fallthrough; must be fetched as a string
                     case NUOSQL_NUMERIC:
                     case NUOSQL_DECIMAL: {
-                        const char *str = resultSet->getString(columnIndex);
-                        if (str && !resultSet->wasNull()) {
+                        union {
+                            const char *string;
+                            int64_t i64;
+                        } value = { resultSet->getString(columnIndex) };
+                        if (!resultSet->wasNull()) {
                             vt = NUODB_TYPE_BYTES; // strings are returned as bytes
-                            i32 = std::strlen(str);
-                            bytesCount += i32;
+                            i64 = value.i64;
+                            i32 = std::strlen(value.string);
                         }
                         break;
                     }
@@ -368,8 +370,12 @@ int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs,
                         const Bytes b = resultSet->getBytes(columnIndex);
                         if (!resultSet->wasNull()) {
                             vt = NUODB_TYPE_BYTES;
+                            union {
+                                const unsigned char *bytes;
+                                int64_t i64;
+                            } value = { b.data };
+                            i64 = value.i64;
                             i32 = b.length;
-                            bytesCount += i32;
                         }
                         break;
                     }
@@ -377,58 +383,6 @@ int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs,
                 values[i].i64 = i64;
                 values[i].i32 = i32;
                 values[i].vt = vt;
-            }
-        }
-        *bytes_count = bytesCount;
-        return 0;
-    } catch (SQLException &e) {
-        return setError(db, e);
-    }
-}
-
-int nuodb_resultset_bytes(struct nuodb *db, struct nuodb_resultset *rs, unsigned char *bytes) {
-    ResultSet *resultSet = reinterpret_cast<ResultSet *>(rs);
-    try {
-        ResultSetMetaData *resultSetMetaData = resultSet->getMetaData();
-        int columnCount = resultSetMetaData->getColumnCount();
-        for (int i=0; i < columnCount; ++i) {
-            int columnIndex = i+1;
-            switch (resultSetMetaData->getColumnType(columnIndex)) {
-                case NUOSQL_NULL:
-                case NUOSQL_FLOAT:
-                case NUOSQL_DOUBLE:
-                case NUOSQL_BIT:
-                case NUOSQL_BOOLEAN:
-                case NUOSQL_DATE:
-                case NUOSQL_TIME:
-                case NUOSQL_TIMESTAMP:
-                    break; // skip
-                case NUOSQL_TINYINT:
-                case NUOSQL_SMALLINT:
-                case NUOSQL_INTEGER:
-                case NUOSQL_BIGINT:
-                    if (resultSetMetaData->getScale(columnIndex) == 0) {
-                        break; // skip
-                    }
-                    // fallthrough; must be fetched as a string
-                case NUOSQL_NUMERIC:
-                case NUOSQL_DECIMAL: {
-                    const char *str = resultSet->getString(columnIndex);
-                    if (str && !resultSet->wasNull()) {
-                        size_t length = std::strlen(str);
-                        std::memcpy(bytes, str, length);
-                        bytes += length;
-                    }
-                    break;
-                }
-                default: {
-                    const Bytes b = resultSet->getBytes(columnIndex);
-                    if (!resultSet->wasNull()) {
-                        std::memcpy(bytes, b.data, b.length);
-                        bytes += b.length;
-                    }
-                    break;
-                }
             }
         }
         return 0;

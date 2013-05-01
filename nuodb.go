@@ -299,25 +299,15 @@ func (rows *Rows) Columns() []string {
 func (rows *Rows) Next(dest []driver.Value) error {
 	c := rows.c
 	var hasValues C.int
-	var bytesCount C.int
 	if len(rows.rowValues) == 0 {
 		return io.EOF
 	}
-	if C.nuodb_resultset_next(c.db, rows.rs, &hasValues, &bytesCount,
+	if C.nuodb_resultset_next(c.db, rows.rs, &hasValues,
 		(*C.struct_nuodb_value)(unsafe.Pointer(&rows.rowValues[0]))) != 0 {
 		return c.lastError()
 	}
 	if hasValues == 0 {
 		return io.EOF
-	}
-	var rowBytes []byte
-	var rowBytesOffset int
-	if bytesCount > 0 {
-		rowBytes = make([]byte, bytesCount)
-		if C.nuodb_resultset_bytes(c.db, rows.rs,
-			(*C.uchar)(unsafe.Pointer(&rowBytes[0]))) != 0 {
-			return c.lastError()
-		}
 	}
 	for i, value := range rows.rowValues {
 		switch value.vt {
@@ -335,10 +325,9 @@ func (rows *Rows) Next(dest []driver.Value) error {
 			dest[i] = time.Unix(seconds, nanos).In(c.loc)
 		default:
 			// byte slice
-			length := int(value.i32)
+			length := (C.int)(value.i32)
 			if length > 0 {
-				dest[i] = rowBytes[rowBytesOffset : rowBytesOffset+length]
-				rowBytesOffset += length
+				dest[i] = C.GoBytes(unsafe.Pointer((uintptr)(value.i64)), length)
 			} else {
 				dest[i] = []byte{}
 			}

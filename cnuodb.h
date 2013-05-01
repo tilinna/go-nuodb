@@ -11,7 +11,6 @@
     - fetch column names
     - bind parameters to a statement
     - fetch row values from a result set
-        (first basic values, then the bytes to a single buffer)
 */
 #pragma once
 
@@ -59,8 +58,7 @@ int nuodb_statement_query(struct nuodb *db, struct nuodb_statement *st, struct n
 int nuodb_statement_close(struct nuodb *db, struct nuodb_statement **st);
 
 int nuodb_resultset_column_names(struct nuodb *db, struct nuodb_resultset *rs, struct nuodb_value names[]);
-int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs, int *has_values, int *bytes_count, struct nuodb_value values[]);
-int nuodb_resultset_bytes(struct nuodb *db, struct nuodb_resultset *rs, unsigned char *bytes);
+int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs, int *has_values, struct nuodb_value values[]);
 int nuodb_resultset_close(struct nuodb *db, struct nuodb_resultset **rs);
 
 #ifdef __cplusplus
