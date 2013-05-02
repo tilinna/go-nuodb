@@ -1,2 +1,2 @@
 *.so
-nuodb_ldflags.go
+ldflags.go
