@@ -5,7 +5,7 @@ go-nuodb
 
 It wraps the libNuoRemote.so C++ API with a custom C API and then uses Cgo for calling it.
 
-Tested with Go tip 16713:8bdcdfcf9152 (< 1.1) and NuoDB 1.0.2-142-902dc7c on x86_64 CentOS 6.4.
+Tested with Go tip 16741:123d0cef66f8 (< 1.1) and NuoDB 1.0.2-142-902dc7c on x86_64 CentOS 6.4.
 
 ## Setup
 
@@ -55,5 +55,5 @@ $ /opt/nuodb/bin/nuodb --allow-non-durable --database tests --initialize --passw
 ### 2. Run the tests
 
 ```shell
-$ go test -ldflags="-r ." github.com/tilinna/go-nuodb
+$ make -C `go env GOPATH`/src/github.com/tilinna/go-nuodb test
 ```
