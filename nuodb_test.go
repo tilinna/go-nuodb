@@ -143,6 +143,19 @@ func TestExecAndQuery(t *testing.T) {
 			}
 		}
 	}
+
+	// Empty column names
+	rows = query(t, db, "SELECT 12345, current_user FROM dual")
+	columns, err = rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(columns[0]) != 0 {
+		t.Fatal(columns[0])
+	}
+	if len(columns[1]) != 0 {
+		t.Fatal(columns[1])
+	}
 }
 
 func TestCommitAndRollback(t *testing.T) {

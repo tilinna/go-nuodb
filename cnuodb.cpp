@@ -280,6 +280,7 @@ int nuodb_resultset_column_names(struct nuodb *db, struct nuodb_resultset *rs,
             int columnIndex = i+1;
             const char *string = resultSetMetaData->getColumnLabel(columnIndex);
             names[i].i64 = reinterpret_cast<int64_t>(string);
+            names[i].i32 = std::strlen(string);
         }
         return 0;
     } catch (SQLException &e) {

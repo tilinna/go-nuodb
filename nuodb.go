@@ -271,7 +271,10 @@ func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 		}
 		rows.columnNames = make([]string, cc)
 		for i, value := range rows.rowValues {
-			rows.columnNames[i] = C.GoString((*C.char)(unsafe.Pointer(uintptr(value.i64))))
+			if length := (C.int)(value.i32); length > 0 {
+				cstr := (*C.char)(unsafe.Pointer(uintptr(value.i64)))
+				rows.columnNames[i] = C.GoStringN(cstr, length)
+			}
 		}
 	}
 	return rows, nil
