@@ -121,14 +121,10 @@ func TestExecAndQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	now = now.In(loc)
-	db_time := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, loc)
 	db_date := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	// NOTE: there's a bug in NuoDB so that the returned nanoseconds are always 0
-	db_ts := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, loc)
-
 	expected_values := []interface{}{int64(2), int64(-12345), int64(2938746529387465), piNum, "3.1416",
 		float32(math.Pi), float64(math.Pi), "X", []byte{10, 20, 30, 40}, "Hello, 世界", true, false,
-		db_time, db_date, db_ts}
+		now, db_date, now}
 
 	for i, v := range vars {
 		vi := reflect.ValueOf(v).Elem().Interface()

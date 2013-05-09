@@ -1,11 +1,11 @@
 go-nuodb
 ========
 
-[NuoDB](http://www.nuodb.com) driver for [Go](http://www.golang.org) [database/sql](http://golang.org/pkg/database/sql/) interface.
+[NuoDB](http://www.nuodb.com) driver for [Go(golang)](http://www.golang.org) [database/sql](http://golang.org/pkg/database/sql/) interface.
 
 It wraps the libNuoRemote.so C++ API with a custom C API and then uses Cgo for calling it.
 
-Tested with Go tip 16741:123d0cef66f8 (< 1.1) and NuoDB 1.0.2-142-902dc7c on x86_64 CentOS 6.4.
+Tested with go1.1rc3 linux/amd64 and NuoDB 1.1-149-7759b2c on x86_64 CentOS 6.4.
 
 ## Setup
 
