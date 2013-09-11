@@ -143,7 +143,7 @@ func (c *Conn) Begin() (driver.Tx, error) {
 	return tx, nil
 }
 
-func (c Conn) Exec(sql string, args []driver.Value) (driver.Result, error) {
+func (c *Conn) Exec(sql string, args []driver.Value) (driver.Result, error) {
 	if len(args) > 0 {
 		return nil, driver.ErrSkip
 	}
