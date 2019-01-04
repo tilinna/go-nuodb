@@ -123,7 +123,29 @@ static int fetchExecuteResult(struct nuodb *db, Statement *stmt,
             while (resultSet->next()) {
                 // TODO find out how to read the last id first
             }
-            *last_insert_id = resultSet->getLong(1);
+            switch (resultSet->getMetaData()->getColumnType(1)) {
+                 case NUOSQL_TINYINT:
+                 case NUOSQL_SMALLINT:
+                 case NUOSQL_INTEGER:
+                 case NUOSQL_BIGINT:
+                 case NUOSQL_FLOAT:
+                 case NUOSQL_DOUBLE:
+                 case NUOSQL_NUMERIC:
+                 case NUOSQL_DECIMAL:
+                    *last_insert_id = resultSet->getLong(1);
+                    break;
+                default:
+                    // This is to avoid a failure when trying to call resultSet->getLong() when
+                    // the generated column has a string type and a default sequence. If the user
+                    // passes a string that cannot be converted to long, an exception is thrown.
+                    //
+                    // Since this only happens when the string is user-provided, we don't need to
+                    // worry about trying to parse the returned value to return to the user.
+                    //
+                    // See TestStringSequence for more details.
+                    *last_insert_id = 0;
+                    break;
+            }
         } else {
             *last_insert_id = 0;
         }
