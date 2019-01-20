@@ -1,4 +1,5 @@
 // Copyright (C) 2013 Timo Linna. All Rights Reserved.
+
 package nuodb
 
 // #cgo LDFLAGS: -L. -lcnuodb -L/opt/nuodb/lib64/ -lNuoRemote
@@ -101,19 +102,22 @@ func newConn(database, username, password, schema, timezone string) (*Conn, erro
 	defer C.free(unsafe.Pointer(cschema))
 	ctimezone := C.CString(timezone)
 	defer C.free(unsafe.Pointer(ctimezone))
-	if C.nuodb_open(c.db, cdatabase, cusername, cpassword, cschema, ctimezone) != 0 {
-		lastError := c.lastError()
+	if rc := C.nuodb_open(c.db, cdatabase, cusername, cpassword, cschema, ctimezone); rc != 0 {
+		lastError := c.lastError(rc)
 		C.nuodb_close(&c.db)
 		return nil, lastError
 	}
 	return c, nil
 }
 
-func (c *Conn) lastError() error {
+func (c *Conn) lastError(sqlCode C.int) error {
 	if c == nil || c.db == nil {
 		return errUninitialized
 	}
-	return fmt.Errorf("nuodb: %s", C.GoString(C.nuodb_error(c.db)))
+	return &Error{
+		Code:    ErrorCode(sqlCode),
+		Message: C.GoString(C.nuodb_error(c.db)),
+	}
 }
 
 func (c *Conn) Prepare(sql string) (driver.Stmt, error) {
@@ -123,8 +127,8 @@ func (c *Conn) Prepare(sql string) (driver.Stmt, error) {
 	csql := C.CString(sql)
 	defer C.free(unsafe.Pointer(csql))
 	stmt := &Stmt{c: c}
-	if C.nuodb_statement_prepare(c.db, csql, &stmt.st, &stmt.parameterCount) != 0 {
-		return nil, c.lastError()
+	if rc := C.nuodb_statement_prepare(c.db, csql, &stmt.st, &stmt.parameterCount); rc != 0 {
+		return nil, c.lastError(rc)
 	}
 	stmt.ddlStatement = ddlStatement(sql)
 	return stmt, nil
@@ -136,9 +140,10 @@ func (c *Conn) Begin() (driver.Tx, error) {
 	}
 	tx := &Tx{c: c}
 	// TODO: should use "START TRANSACTION"
-	if C.nuodb_autocommit(c.db, &tx.autoCommit) != 0 ||
-		C.nuodb_autocommit_set(c.db, 0) != 0 {
-		return nil, c.lastError()
+	if rc1 := C.nuodb_autocommit(c.db, &tx.autoCommit); rc1 != 0 {
+		return nil, c.lastError(rc1)
+	} else if rc2 := C.nuodb_autocommit_set(c.db, 0); rc2 != 0 {
+		return nil, c.lastError(rc2)
 	}
 	return tx, nil
 }
@@ -150,8 +155,8 @@ func (c *Conn) Exec(sql string, args []driver.Value) (driver.Result, error) {
 	csql := C.CString(sql)
 	defer C.free(unsafe.Pointer(csql))
 	result := &Result{}
-	if C.nuodb_execute(c.db, csql, &result.rowsAffected, &result.lastInsertId) != 0 {
-		return nil, c.lastError()
+	if rc := C.nuodb_execute(c.db, csql, &result.rowsAffected, &result.lastInsertId); rc != 0 {
+		return nil, c.lastError(rc)
 	}
 	if result.rowsAffected == 0 && ddlStatement(sql) {
 		return driver.ResultNoRows, nil
@@ -222,9 +227,9 @@ func (stmt *Stmt) bind(args []driver.Value) error {
 		parameters[i].i32 = i32
 		parameters[i].vt = vt
 	}
-	if C.nuodb_statement_bind(c.db, stmt.st,
-		(*C.struct_nuodb_value)(unsafe.Pointer(&parameters[0]))) != 0 {
-		return c.lastError()
+	if rc := C.nuodb_statement_bind(c.db, stmt.st,
+		(*C.struct_nuodb_value)(unsafe.Pointer(&parameters[0]))); rc != 0 {
+		return c.lastError(rc)
 	}
 	return nil
 }
@@ -239,8 +244,8 @@ func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 		return nil, fmt.Errorf("bind: %s", err)
 	}
 	result := &Result{}
-	if C.nuodb_statement_execute(c.db, stmt.st, &result.rowsAffected, &result.lastInsertId) != 0 {
-		return nil, c.lastError()
+	if rc := C.nuodb_statement_execute(c.db, stmt.st, &result.rowsAffected, &result.lastInsertId); rc != 0 {
+		return nil, c.lastError(rc)
 	}
 	if result.rowsAffected == 0 && stmt.ddlStatement {
 		return driver.ResultNoRows, err
@@ -259,15 +264,15 @@ func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 	rows := &Rows{c: c}
 	var columnCount C.int
-	if C.nuodb_statement_query(c.db, stmt.st, &rows.rs, &columnCount) != 0 {
-		return nil, c.lastError()
+	if rc := C.nuodb_statement_query(c.db, stmt.st, &rows.rs, &columnCount); rc != 0 {
+		return nil, c.lastError(rc)
 	}
 	if columnCount > 0 {
 		cc := int(columnCount)
 		rows.rowValues = make([]C.struct_nuodb_value, cc)
-		if C.nuodb_resultset_column_names(c.db, rows.rs,
-			(*C.struct_nuodb_value)(unsafe.Pointer(&rows.rowValues[0]))) != 0 {
-			return nil, c.lastError()
+		if rc := C.nuodb_resultset_column_names(c.db, rows.rs,
+			(*C.struct_nuodb_value)(unsafe.Pointer(&rows.rowValues[0]))); rc != 0 {
+			return nil, c.lastError(rc)
 		}
 		rows.columnNames = make([]string, cc)
 		for i, value := range rows.rowValues {
@@ -281,8 +286,10 @@ func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (stmt *Stmt) Close() error {
-	if stmt != nil && stmt.c.db != nil && C.nuodb_statement_close(stmt.c.db, &stmt.st) != 0 {
-		return stmt.c.lastError()
+	if stmt != nil && stmt.c.db != nil {
+		if rc := C.nuodb_statement_close(stmt.c.db, &stmt.st); rc != 0 {
+			return stmt.c.lastError(rc)
+		}
 	}
 	return nil
 }
@@ -305,9 +312,9 @@ func (rows *Rows) Next(dest []driver.Value) error {
 	if len(rows.rowValues) == 0 {
 		return io.EOF
 	}
-	if C.nuodb_resultset_next(c.db, rows.rs, &hasValues,
-		(*C.struct_nuodb_value)(unsafe.Pointer(&rows.rowValues[0]))) != 0 {
-		return c.lastError()
+	if rc := C.nuodb_resultset_next(c.db, rows.rs, &hasValues,
+		(*C.struct_nuodb_value)(unsafe.Pointer(&rows.rowValues[0]))); rc != 0 {
+		return c.lastError(rc)
 	}
 	if hasValues == 0 {
 		return io.EOF
@@ -340,9 +347,10 @@ func (rows *Rows) Next(dest []driver.Value) error {
 }
 
 func (rows *Rows) Close() error {
-	if rows != nil && rows.c.db != nil &&
-		C.nuodb_resultset_close(rows.c.db, &rows.rs) != 0 {
-		return rows.c.lastError()
+	if rows != nil && rows.c.db != nil {
+		if rc := C.nuodb_resultset_close(rows.c.db, &rows.rs); rc != 0 {
+			return rows.c.lastError(rc)
+		}
 	}
 	return nil
 }
@@ -356,8 +364,8 @@ func (tx *Tx) Commit() error {
 		return errClosed
 	}
 	defer tx.restoreAutoCommit()
-	if C.nuodb_commit(tx.c.db) != 0 {
-		return tx.c.lastError()
+	if rc := C.nuodb_commit(tx.c.db); rc != 0 {
+		return tx.c.lastError(rc)
 	}
 	return nil
 }
@@ -367,8 +375,8 @@ func (tx *Tx) Rollback() error {
 		return errClosed
 	}
 	defer tx.restoreAutoCommit()
-	if C.nuodb_rollback(tx.c.db) != 0 {
-		return tx.c.lastError()
+	if rc := C.nuodb_rollback(tx.c.db); rc != 0 {
+		return tx.c.lastError(rc)
 	}
 	return nil
 }
