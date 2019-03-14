@@ -40,21 +40,24 @@ const char *nuodb_error(const struct nuodb *db) {
 }
 
 int nuodb_open(struct nuodb *db, const char *database, const char *username,
-               const char *password, const char *schema, const char *timezone) {
+               const char *password, const char **props, int props_count) {
     closeDb(db);
     Connection *conn = 0;
     try {
         conn = Connection::create();
-        Properties *props = conn->allocProperties(); // TODO: freed on conn->close()?
-        props->putValue("user", username);
-        props->putValue("password", password);
-        if (schema && std::strlen(schema) > 0) {
-            props->putValue("schema", schema);
+        Properties *p = conn->allocProperties(); // TODO: freed on conn->close()?
+        p->putValue("user", username);
+        p->putValue("password", password);
+
+        for (int i = 0; i < props_count; i += 2) {
+            const char *k = props[i];
+            const char *v = props[i+1];
+            if (k && v && std::strlen(k) > 0 && std::strlen(v) > 0) {
+                p->putValue(k, v);
+            }
         }
-        if (timezone && std::strlen(timezone) > 0) {
-            props->putValue("timezone", timezone);
-        }
-        conn->openDatabase(database, props);
+
+        conn->openDatabase(database, p);
         conn->setAutoCommit(true); // enforce autocommit by default
         db->conn = conn;
         return 0;

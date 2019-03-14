@@ -42,7 +42,7 @@ struct nuodb_value {
 
 void nuodb_init(struct nuodb **db);
 const char *nuodb_error(const struct nuodb *db);
-int nuodb_open(struct nuodb *db, const char *database, const char *username, const char *password, const char *schema, const char *timezone);
+int nuodb_open(struct nuodb *db, const char *database, const char *username, const char *password, const char **props, int props_count);
 int nuodb_close(struct nuodb **db);
 
 int nuodb_autocommit(struct nuodb *db, int *state);
