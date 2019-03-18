@@ -67,13 +67,17 @@ func (d *nuodbDriver) Open(dsn string) (conn driver.Conn, err error) {
 	var url *url.URL
 	if url, err = url.Parse(dsn); err == nil {
 		if url.Scheme == "nuodb" && url.User != nil {
-			query := url.Query()
 			database := fmt.Sprintf("%s@%s", path.Base(url.Path), url.Host)
 			username := url.User.Username()
 			password, _ := url.User.Password()
-			schema := query.Get("schema")
-			timezone := query.Get("timezone")
-			conn, err = newConn(database, username, password, schema, timezone)
+
+			query := url.Query()
+			props := make(map[string]string, len(query))
+			for key := range query {
+				props[key] = query.Get(key) // Get the first value for the key
+			}
+
+			conn, err = newConn(database, username, password, props)
 		} else {
 			err = fmt.Errorf("nuodb: invalid dsn: %s", dsn)
 		}
@@ -81,9 +85,9 @@ func (d *nuodbDriver) Open(dsn string) (conn driver.Conn, err error) {
 	return
 }
 
-func newConn(database, username, password, schema, timezone string) (*Conn, error) {
-	location := timezone
-	if timezone == "" {
+func newConn(database, username, password string, props map[string]string) (*Conn, error) {
+	location := props["timezone"]
+	if location == "" {
 		location = "Local"
 	}
 	loc, err := time.LoadLocation(location)
@@ -98,11 +102,25 @@ func newConn(database, username, password, schema, timezone string) (*Conn, erro
 	defer C.free(unsafe.Pointer(cusername))
 	cpassword := C.CString(password)
 	defer C.free(unsafe.Pointer(cpassword))
-	cschema := C.CString(schema)
-	defer C.free(unsafe.Pointer(cschema))
-	ctimezone := C.CString(timezone)
-	defer C.free(unsafe.Pointer(ctimezone))
-	if rc := C.nuodb_open(c.db, cdatabase, cusername, cpassword, cschema, ctimezone); rc != 0 {
+
+	cprops := make([]*C.char, 2*len(props))
+	i := 0
+	for k, v := range props {
+		key := C.CString(k)
+		val := C.CString(v)
+		defer C.free(unsafe.Pointer(key))
+		defer C.free(unsafe.Pointer(val))
+
+		cprops[i] = key
+		cprops[i+1] = val
+		i += 2
+	}
+
+	var cpropsPtr **C.char
+	if len(cprops) > 0 {
+		cpropsPtr = (**C.char)(unsafe.Pointer(&cprops[0]))
+	}
+	if rc := C.nuodb_open(c.db, cdatabase, cusername, cpassword, cpropsPtr, C.int(len(cprops))); rc != 0 {
 		lastError := c.lastError(rc)
 		C.nuodb_close(&c.db)
 		return nil, lastError

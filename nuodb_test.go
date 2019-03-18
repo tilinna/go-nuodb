@@ -8,11 +8,13 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
 
-const default_dsn = "nuodb://robinh:crossbow@localhost:48004/tests?timezone=America/Los_Angeles"
+const base_dsn = "nuodb://robinh:crossbow@localhost:48004/tests"
+const default_dsn = base_dsn + "?timezone=America/Los_Angeles"
 
 const (
 	syntaxError      = -1
@@ -474,5 +476,131 @@ func TestNumericSequence(t *testing.T) {
 	}
 	if id != 1 {
 		t.Fatalf("Expected last insert id to be 1, was %d", id)
+	}
+}
+
+func TestConnectionPropsSchema(t *testing.T) {
+	expectedSchema := "tests"
+	dsn := default_dsn + "&schema=" + expectedSchema
+
+	db, err := sql.Open("nuodb", dsn)
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+
+	rows := query(t, db, "SELECT current_schema() FROM DUAL")
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatal("Expected rows")
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
+
+	var schema string
+	rows.Scan(&schema)
+	schema = strings.ToLower(schema)
+
+	if rows.Next() {
+		t.Fatal("Unexpected rows")
+	}
+
+	if schema != expectedSchema {
+		t.Fatalf("Expected schema '%s', was '%s'", expectedSchema, schema)
+	}
+}
+
+func TestConnectionPropsTimezone(t *testing.T) {
+	localZone, _ := time.Now().Zone()
+	tests := []struct{ tz, expected string }{
+		{"Asia/Tokyo", "JST"},
+		{"", localZone},
+	}
+
+	for _, test := range tests {
+		t.Run(test.expected, func(t *testing.T) {
+			dsn := base_dsn + "?timezone=" + test.tz
+
+			db, err := sql.Open("nuodb", dsn)
+			if err != nil {
+				t.Fatal("sql.Open:", err)
+			}
+
+			rows := query(t, db, "SELECT NOW() FROM DUAL")
+			defer rows.Close()
+
+			if !rows.Next() {
+				t.Fatal("Expected rows")
+			}
+			if rows.Err() != nil {
+				t.Fatal(rows.Err())
+			}
+
+			var now time.Time
+			rows.Scan(&now)
+
+			if rows.Next() {
+				t.Fatal("Unexpected rows")
+			}
+
+			zone, _ := now.Zone()
+			if zone != test.expected {
+				t.Fatalf("Expected TZ '%s', was '%s'", test.expected, zone)
+			}
+		})
+	}
+}
+
+func TestConnectionPropsClientInfo(t *testing.T) {
+	expectedInfo := "arbitraryinfo"
+	dsn := default_dsn + "&clientInfo=" + expectedInfo
+
+	db, err := sql.Open("nuodb", dsn)
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+
+	rows := query(t, db, "SELECT clientinfo FROM system.localconnections WHERE connid = GETCONNECTIONID()")
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatal("Expected rows")
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
+
+	var clientInfo string
+	rows.Scan(&clientInfo)
+
+	if rows.Next() {
+		t.Fatal("Unexpected rows")
+	}
+
+	if clientInfo != expectedInfo {
+		t.Fatalf("Expected clientInfo '%s', was '%s'", expectedInfo, clientInfo)
+	}
+}
+
+func TestConnectionPropsEmpty(t *testing.T) {
+	dsn := default_dsn + "&="
+
+	db, err := sql.Open("nuodb", dsn)
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+
+	rows := query(t, db, "SELECT 1 FROM DUAL")
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatal("Expected rows")
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
+	if rows.Next() {
+		t.Fatal("Unexpected rows")
 	}
 }
