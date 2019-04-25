@@ -1,6 +1,7 @@
 /*
     Copyright (C) 2013 Timo Linna. All Rights Reserved.
 */
+#include <cstddef>
 #include "cnuodb.h"
 #include "NuoDB.h"
 #include <cstring>
