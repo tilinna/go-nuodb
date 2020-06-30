@@ -2,6 +2,7 @@
 
 package nuodb
 
+// #cgo CPPFLAGS: -I/opt/nuodb/include 
 // #cgo LDFLAGS: -L. -lcnuodb -L/opt/nuodb/lib64/ -lNuoRemote
 // #include "cnuodb.h"
 // #include <stdlib.h>
