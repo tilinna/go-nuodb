@@ -2,12 +2,13 @@
 
 package nuodb
 
-// #cgo CPPFLAGS: -I/opt/nuodb/include 
+// #cgo CPPFLAGS: -I/opt/nuodb/include
 // #cgo LDFLAGS: -L. -lcnuodb -L/opt/nuodb/lib64/ -lNuoRemote
 // #include "cnuodb.h"
 // #include <stdlib.h>
 import "C"
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -171,10 +172,23 @@ func (c *Conn) Exec(sql string, args []driver.Value) (driver.Result, error) {
 	if len(args) > 0 {
 		return nil, driver.ErrSkip
 	}
+	return c.ExecContext(context.Background(), sql, nil)
+}
+
+func (c *Conn) ExecContext(ctx context.Context, sql string, args []driver.NamedValue) (driver.Result, error) {
+	if len(args) > 0 {
+		return nil, driver.ErrSkip
+	}
 	csql := C.CString(sql)
 	defer C.free(unsafe.Pointer(csql))
 	result := &Result{}
-	if rc := C.nuodb_execute(c.db, csql, &result.rowsAffected, &result.lastInsertId); rc != 0 {
+
+	uSec, err := getMicrosecondsUntilDeadline(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if rc := C.nuodb_execute(c.db, csql, &result.rowsAffected, &result.lastInsertId, uSec); rc != 0 {
 		return nil, c.lastError(rc)
 	}
 	if result.rowsAffected == 0 && ddlStatement(sql) {
@@ -254,6 +268,19 @@ func (stmt *Stmt) bind(args []driver.Value) error {
 }
 
 func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
+	return stmt.execQuery(context.Background(), args)
+}
+
+func (stmt *Stmt) ExecQuery(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	values, err := namedValuesToValues(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return stmt.execQuery(ctx, values)
+}
+
+func (stmt *Stmt) execQuery(ctx context.Context, args []driver.Value) (driver.Result, error) {
 	var err error
 	c := stmt.c
 	if c.db == nil {
@@ -261,6 +288,9 @@ func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 	}
 	if err = stmt.bind(args); err != nil {
 		return nil, fmt.Errorf("bind: %s", err)
+	}
+	if err = stmt.addTimeoutFromContext(ctx); err != nil {
+		return nil, err
 	}
 	result := &Result{}
 	if rc := C.nuodb_statement_execute(c.db, stmt.st, &result.rowsAffected, &result.lastInsertId); rc != 0 {
@@ -273,6 +303,18 @@ func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 }
 
 func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
+	return stmt.queryContext(context.Background(), args)
+}
+
+func (stmt *Stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	values, err := namedValuesToValues(args)
+	if err != nil {
+		return nil, err
+	}
+	return stmt.queryContext(ctx, values)
+}
+
+func (stmt *Stmt) queryContext(ctx context.Context, args []driver.Value) (driver.Rows, error) {
 	var err error
 	c := stmt.c
 	if c.db == nil {
@@ -280,6 +322,9 @@ func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 	if err = stmt.bind(args); err != nil {
 		return nil, fmt.Errorf("bind: %s", err)
+	}
+	if err = stmt.addTimeoutFromContext(ctx); err != nil {
+		return nil, err
 	}
 	rows := &Rows{c: c}
 	var columnCount C.int
@@ -302,6 +347,40 @@ func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 		}
 	}
 	return rows, nil
+}
+
+func (stmt *Stmt) addTimeoutFromContext(ctx context.Context) error {
+	uSec, err := getMicrosecondsUntilDeadline(ctx)
+	if err != nil {
+		return err
+	}
+
+	C.nuodb_statement_set_query_micros(stmt.c.db, stmt.st, uSec)
+
+	return nil
+}
+
+func getMicrosecondsUntilDeadline(ctx context.Context) (uSec C.int64_t, err error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		uSec = C.int64_t(time.Until(deadline).Microseconds())
+	}
+
+	if err = ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	return uSec, nil
+}
+
+func namedValuesToValues(namedValues []driver.NamedValue) ([]driver.Value, error) {
+	values := make([]driver.Value, 0, len(namedValues))
+	for _, namedValue := range namedValues {
+		if len(namedValue.Name) != 0 {
+			return nil, fmt.Errorf("sql driver doesn't support named values")
+		}
+		values = append(values, namedValue.Value)
+	}
+	return values, nil
 }
 
 func (stmt *Stmt) Close() error {
