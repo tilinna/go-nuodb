@@ -250,11 +250,15 @@ func (stmt *Stmt) bind(args []driver.Value) error {
 			b := []byte(v)
 			args[i] = b // ensure the b is not GC'ed before the _bind
 			i32 = C.int32_t(len(v))
-			i64 = C.int64_t(uintptr(unsafe.Pointer(&b[0])))
+			if len(b) > 0 {
+				i64 = C.int64_t(uintptr(unsafe.Pointer(&b[0])))
+			}
 		case []byte:
 			vt = C.NUODB_TYPE_BYTES
 			i32 = C.int32_t(len(v))
-			i64 = C.int64_t(uintptr(unsafe.Pointer(&v[0])))
+			if len(v) > 0 {
+				i64 = C.int64_t(uintptr(unsafe.Pointer(&v[0])))
+			}
 		case time.Time:
 			vt = C.NUODB_TYPE_TIME
 			i32 = C.int32_t(v.Nanosecond())
