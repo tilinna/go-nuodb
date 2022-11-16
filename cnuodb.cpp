@@ -302,8 +302,8 @@ int nuodb_statement_set_query_micros(struct nuodb *db, struct nuodb_statement *s
     try {
         if (st) {
             PreparedStatement *stmt = reinterpret_cast<PreparedStatement *>(st);
+            // Set the timeout in micro seconds; zero means there is no limit.
             stmt->setQueryTimeoutMicros(timeout_micro_seconds);
-            st = 0;
         }
         return 0;
     } catch (SQLException &e) {

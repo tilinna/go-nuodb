@@ -35,6 +35,12 @@ type Stmt struct {
 	ddlStatement   bool
 }
 
+var _ interface {
+	driver.Stmt
+	driver.StmtQueryContext
+	// driver.StmtExecContext
+} = (*Stmt)(nil)
+
 type Result struct {
 	rowsAffected C.int64_t
 	lastInsertId C.int64_t
@@ -360,6 +366,9 @@ func (stmt *Stmt) addTimeoutFromContext(ctx context.Context) error {
 	return nil
 }
 
+// getMicrosecondsUntilDeadline returns the number of micro seconds until the context's deadline is reached.
+// Returns an error if the context is already done.
+// N.B. A value of zero means no limit.
 func getMicrosecondsUntilDeadline(ctx context.Context) (uSec C.int64_t, err error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		uSec = C.int64_t(time.Until(deadline).Microseconds())
