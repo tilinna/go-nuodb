@@ -164,10 +164,11 @@ static int fetchExecuteResult(struct nuodb *db, Statement *stmt,
 }
 
 int nuodb_execute(struct nuodb *db, const char *sql,
-                  int64_t *rows_affected, int64_t *last_insert_id) {
+                  int64_t *rows_affected, int64_t *last_insert_id, int64_t timeout_micro_seconds) {
     Statement *stmt = 0;
     try {
         stmt = db->conn->createStatement();
+        stmt->setQueryTimeoutMicros(timeout_micro_seconds);
         stmt->executeUpdate(sql, RETURN_GENERATED_KEYS);
         int rc = fetchExecuteResult(db, stmt, rows_affected, last_insert_id);
         stmt->close();
@@ -289,6 +290,20 @@ int nuodb_statement_close(struct nuodb *db, struct nuodb_statement **st) {
             PreparedStatement *stmt = reinterpret_cast<PreparedStatement *>(*st);
             stmt->close();
             *st = 0;
+        }
+        return 0;
+    } catch (SQLException &e) {
+        return setError(db, e);
+    }
+}
+
+int nuodb_statement_set_query_micros(struct nuodb *db, struct nuodb_statement *st,
+                                     int64_t timeout_micro_seconds) {
+    try {
+        if (st) {
+            PreparedStatement *stmt = reinterpret_cast<PreparedStatement *>(st);
+            // Set the timeout in micro seconds; zero means there is no limit.
+            stmt->setQueryTimeoutMicros(timeout_micro_seconds);
         }
         return 0;
     } catch (SQLException &e) {

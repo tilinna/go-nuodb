@@ -3,6 +3,7 @@
 package nuodb
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"math"
@@ -18,9 +19,9 @@ const default_dsn = base_dsn + "?timezone=America/Los_Angeles"
 
 const (
 	syntaxError      = -1
-	compileError     = -4
 	conversionError  = -8
 	connectionError  = -10
+	ddlError         = -11
 	noSuchTableError = -25
 )
 
@@ -35,8 +36,27 @@ func exec(t *testing.T, db *sql.DB, sql string, args ...interface{}) (li, ra int
 	return
 }
 
+func execContext(t *testing.T, db *sql.DB, ctx context.Context, sql string, args ...interface{}) (li, ra int64) {
+	result, err := db.ExecContext(ctx, sql, args...)
+	if err != nil {
+		_, _, line, _ := runtime.Caller(1)
+		t.Fatalf("line:%d sql: %s err: %s", line, sql, err)
+	}
+	li, _ = result.LastInsertId()
+	ra, _ = result.RowsAffected()
+	return
+}
+
 func query(t *testing.T, db *sql.DB, sql string, args ...interface{}) *sql.Rows {
 	rows, err := db.Query(sql, args...)
+	if err != nil {
+		t.Fatal(sql, "=>", err)
+	}
+	return rows
+}
+
+func queryContext(t *testing.T, db *sql.DB, ctx context.Context, sql string, args ...interface{}) *sql.Rows {
+	rows, err := db.QueryContext(ctx, sql, args...)
 	if err != nil {
 		t.Fatal(sql, "=>", err)
 	}
@@ -73,7 +93,7 @@ func expectErrorCode(t *testing.T, err error, code int) {
 
 func TestConnectionError(t *testing.T) {
 	// Use an invalid IP address to force a connection error
-	db, err := sql.Open("nuodb", "nuodb://robinh:crossbow@0.0.0.1:48004/tests")
+	db, err := sql.Open("nuodb", "nuodb://robinh:crossbow@0.0.0:48004/tests")
 	if err != nil {
 		t.Fatal("sql.Open:", err)
 	}
@@ -193,12 +213,92 @@ func TestExecAndQuery(t *testing.T) {
 	}
 }
 
+func TestExecAndQueryContext(t *testing.T) {
+	db := testConn(t)
+	defer db.Close()
+
+	id, ra := exec(t, db, "CREATE TABLE FooBar (id BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL, ir INTEGER)")
+	if id|ra != 0 {
+		t.Fatal(id, ra)
+	}
+
+	t.Run("context canceled before call", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := db.ExecContext(ctx, "INSERT INTO FooBar (ir) VALUES (1)")
+		if !strings.Contains(err.Error(), "context canceled") {
+			t.Fatal(err)
+		}
+
+		_, err = db.QueryContext(ctx, "SELECT 1 FROM Dual")
+		if !strings.Contains(err.Error(), "context canceled") {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("call done with context without deadline", func(t *testing.T) {
+		ctx := context.Background()
+
+		id, ra := execContext(t, db, ctx, "INSERT INTO FooBar (ir) VALUES (1)")
+		if id|ra == 0 {
+			t.Fatal(id, ra)
+		}
+
+		rows := queryContext(t, db, ctx, "SELECT 1 FROM Dual")
+		defer rows.Close()
+		if !rows.Next() {
+			t.Fatal("Expected rows")
+		}
+	})
+
+	t.Run("call done before context deadline", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+		defer cancel()
+
+		id, ra := execContext(t, db, ctx, "INSERT INTO FooBar (ir) VALUES (2)")
+		if id|ra == 0 {
+			t.Fatal(id, ra)
+		}
+
+		rows := queryContext(t, db, ctx, "SELECT 1 FROM Dual")
+		defer rows.Close()
+		if !rows.Next() {
+			t.Fatal("Expected rows")
+		}
+	})
+
+	t.Run("call is interrupted by context", func(t *testing.T) {
+		ctxExec, cancelExec := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancelExec()
+
+		// SQL query that will 'spin' artificially for 5s.
+		longQuery := `
+VAR until TIMESTAMP=(SELECT DATE_ADD(NOW(), INTERVAL 5 SECOND) FROM DUAL);
+WHILE ((SELECT NOW() FROM DUAL) < until ) 
+END_WHILE`
+
+		_, err := db.ExecContext(ctxExec, longQuery)
+		if !strings.Contains(err.Error(), "exceeded") {
+			t.Fatal(err)
+		}
+
+		ctxQuery, cancelQuery := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancelQuery()
+
+		_, err = db.QueryContext(ctxQuery, longQuery)
+		if !strings.Contains(err.Error(), "exceeded") {
+			t.Fatal(err)
+		}
+	})
+}
+
 func TestExecAndQueryError(t *testing.T) {
 	db := testConn(t)
 	defer db.Close()
 
 	_, err := db.Exec("CALL NotARealFunction()")
-	expectErrorCode(t, err, compileError)
+	expectErrorCode(t, err, ddlError)
 
 	_, err = db.Query("SELECT * FROM tests.NotARealTable")
 	expectErrorCode(t, err, noSuchTableError)

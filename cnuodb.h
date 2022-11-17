@@ -49,13 +49,14 @@ int nuodb_autocommit(struct nuodb *db, int *state);
 int nuodb_autocommit_set(struct nuodb *db, int state);
 int nuodb_commit(struct nuodb *db);
 int nuodb_rollback(struct nuodb *db);
-int nuodb_execute(struct nuodb *db, const char *sql, int64_t *rows_affected, int64_t *last_insert_id);
+int nuodb_execute(struct nuodb *db, const char *sql, int64_t *rows_affected, int64_t *last_insert_id, int64_t timeout_micro_seconds);
 
 int nuodb_statement_prepare(struct nuodb *db, const char *sql, struct nuodb_statement **st, int *parameter_count);
 int nuodb_statement_bind(struct nuodb *db, struct nuodb_statement *st, struct nuodb_value parameters[]);
 int nuodb_statement_execute(struct nuodb *db, struct nuodb_statement *st, int64_t *rows_affected, int64_t *last_insert_id);
 int nuodb_statement_query(struct nuodb *db, struct nuodb_statement *st, struct nuodb_resultset **rs, int *column_count);
 int nuodb_statement_close(struct nuodb *db, struct nuodb_statement **st);
+int nuodb_statement_set_query_micros(struct nuodb *db, struct nuodb_statement *st, int64_t timeout_micro_seconds);
 
 int nuodb_resultset_column_names(struct nuodb *db, struct nuodb_resultset *rs, struct nuodb_value names[]);
 int nuodb_resultset_next(struct nuodb *db, struct nuodb_resultset *rs, int *has_values, struct nuodb_value values[]);
