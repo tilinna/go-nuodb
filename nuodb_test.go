@@ -213,6 +213,39 @@ func TestExecAndQuery(t *testing.T) {
 	}
 }
 
+func TestEmptyStringAsStatementValue(t *testing.T) {
+	db := testConn(t)
+	defer db.Close()
+
+	id, ra := exec(t, db, "CREATE TABLE FooBar (id string)")
+	if id|ra != 0 {
+		t.Fatal(id, ra)
+	}
+
+	// Insert an empty string by value alongside a control value.
+	id, ra = exec(t, db, "INSERT INTO FooBar (id) VALUES (?),(?)", "", "control")
+	if id|ra == 0 {
+		t.Fatal(id, ra)
+	}
+
+	// Fetch back only empty string value.
+	rows := query(t, db, "SELECT * FROM FooBar where id = ?", "")
+	if !rows.Next() {
+		t.Fatal("Should have rows", rows)
+	}
+	values := [1]string{}
+	if err := rows.Scan(&values[0]); err != nil {
+		t.Fatal("Unable to scan:", err)
+	}
+
+	if values != [1]string{""} {
+		t.Fatal("Unexpected:", values)
+	}
+	if rows.Next() {
+		log.Fatal("Should only have one row", rows)
+	}
+}
+
 func TestExecAndQueryContext(t *testing.T) {
 	db := testConn(t)
 	defer db.Close()
